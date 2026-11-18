@@ -1,0 +1,30 @@
+# Git hooks managed by lefthook. Install lefthook (the encryption-setup skill names the command for your computer),
+# then run `lefthook install` in the repo root.
+# Python is the first of python, py -3 and python3 that runs as Python 3: on Windows, python3 is often the
+# Microsoft Store stub, which is on PATH but only says Python was not found.
+# Serial, in priority order: block tracked source -> encrypt -> validate the STAGED tree (what the commit will
+# publish), not the working tree. CI (.github/workflows/security-baseline.yml) runs the same guard on the pushed
+# tree, so --no-verify here only moves the failure to the pull request.
+# The staged-tree check re-renders every page with staticrypt@3.5.4 (node + `npm i -g staticrypt@3.5.4`); when the
+# pinned library is absent the guard fails closed with that message - install it, never skip the hook.
+pre-commit:
+  parallel: false
+  commands:
+    block-public-encrypted:
+      priority: 1
+      run: |
+        if git diff --cached --name-only -z --diff-filter=AMR | tr '\0' '\n' | grep -q '^public-encrypted/'; then
+          echo "Stopped: public-encrypted/ holds your unencrypted pages, so it stays on this computer. Unstage it with git restore --staged public-encrypted, then commit only the encrypted pages in public/."; exit 1
+        fi
+    encrypt-public:
+      priority: 2
+      run: |
+        set -e
+        for p in python py python3; do a=; [ $p = py ] && a=-3; $p $a -c 'import sys; sys.exit(sys.version_info[0] != 3)' >/dev/null 2>&1 && break; p=; done
+        ${p:-python3} $a scripts/encrypt/encrypt_public.py --skip-unchanged
+        git add -A -- public scripts/encrypt/encrypt-manifest.json
+    check-release-staged:
+      priority: 3
+      run: |
+        for p in python py python3; do a=; [ $p = py ] && a=-3; $p $a -c 'import sys; sys.exit(sys.version_info[0] != 3)' >/dev/null 2>&1 && break; p=; done
+        ${p:-python3} $a scripts/encrypt/encrypt_public.py --check-staged
